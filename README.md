@@ -6,7 +6,7 @@ Using this library you can export your Java DTO objects for use in typescript/ja
 
 ## Example
 
-``java -jar typescriptGenerator.jar -Dtoplevel-packages.0=com.somepackage -Dtoplevel-packages.1=com.otherpackage -Doutput-path=build``
+``java -Dtoplevel-packages.0=com.somepackage -Dnamespace-prefix=pref -Doutput-path="../generated" -D -classpath "./typescriptGenerator.jar:../path/to/classes/or/jar" TypeScriptGenerator``
 
 See: reference.conf for info
 

@@ -1,3 +1,4 @@
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.reflect.ClassPath;
 import com.typesafe.config.Config;
@@ -41,16 +42,29 @@ public class TypeScriptGenerator {
 	}
 
 	public void run() throws IOException {
-		ClassPath from = ClassPath.from(TypeScriptGenerator.class.getClassLoader());
+		ClassPath classPath = ClassPath.from(TypeScriptGenerator.class.getClassLoader());
+		if(config.hasPathOrNull("debug")){
+			System.out.println(format("Classpath: \n %s", Joiner.on("\n").join(classPath.getAllClasses())));
+		}
 		List<String> packageNames = config.getStringList(Constants.Config.TOP_LEVEL_PACKAGES);
 		List<String> exludedClassNames = config.getStringList(Constants.Config.EXLUDED_CLASS_NAMES);
+		System.out.println(format(
+			"Running for %s packages and %s exluded classes",
+			Joiner.on(", ").join(packageNames),
+			Joiner.on(", ").join(exludedClassNames)
+		));
 		for (String packageName : packageNames) {
-			ImmutableSet<ClassPath.ClassInfo> classesRecursive = from.getTopLevelClassesRecursive(packageName);
+			System.out.println(format("Searching in %s", packageName));
+			ImmutableSet<ClassPath.ClassInfo> classesRecursive = classPath.getTopLevelClassesRecursive(packageName);
+			System.out.println(format("Found %s classes", classesRecursive.size()));
 			for (ClassPath.ClassInfo classInfo : classesRecursive) {
 				String name = classInfo.getName();
 				if (!name.contains("-") && !exludedClassNames.contains(name)) {
 					Class<?> clazz = classInfo.load();
+					System.out.println(format("Processing class %s", name));
 					process(clazz);
+				} else {
+					System.out.println(format("Rejected %s", name));
 				}
 			}
 		}
