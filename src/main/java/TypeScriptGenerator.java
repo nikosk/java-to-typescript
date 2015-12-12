@@ -1,5 +1,6 @@
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.UnmodifiableIterator;
 import com.google.common.reflect.ClassPath;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -8,9 +9,15 @@ import javax.xml.datatype.XMLGregorianCalendar;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.regex.Pattern;
 
 import static java.lang.String.format;
 
@@ -25,9 +32,35 @@ public class TypeScriptGenerator {
 	private final Config config;
 	private LinkedHashMap<String, Module> modules = new LinkedHashMap<>();
 	private LinkedHashMap<Class<?>, Module> classToModule = new LinkedHashMap<>();
+	private final String prefix;
+	private final List<Pattern> EXCLUDE_FIELD_PATTERNS;
+	private final List<Pattern> EXCLUDE_CLASS_PATTERNS;
+	private final List<Pattern> INCLUDE_CLASS_PATTERNS;
+	private final List<Pattern> EXCLUDE_FIELD_ANNOTATION_PATTERNS;
 
 	public TypeScriptGenerator(Config conf) {
 		this.config = conf;
+		String prefix = config.getString("namespace-prefix");
+		this.prefix = prefix.isEmpty() ? "" : prefix + ".";
+
+		EXCLUDE_CLASS_PATTERNS = compilePatterns(config.getStringList(Constants.Config.EXLUDE_CLASS_NAMES));
+		INCLUDE_CLASS_PATTERNS = compilePatterns(config.getStringList(Constants.Config.INCLUDE_CLASSES_NAMES));
+		EXCLUDE_FIELD_PATTERNS = compilePatterns(config.getStringList(Constants.Config.EXCLUDE_FIELD_NAMES));
+		EXCLUDE_FIELD_ANNOTATION_PATTERNS = compilePatterns(config.getStringList(Constants.Config.EXCLUDE_FIELD_ANNOTATION_NAMES));
+
+		System.out.println(format(
+			"\n Configuration: " +
+				"\n\t Top level packages: %s" +
+				"\n\t Exclude classes: %s" +
+				"\n\t Include classes: %s" +
+				"\n\t Exclude fields : %s" +
+				"\n\t Exclude field annotations : %s",
+			Joiner.on(", ").join(conf.getStringList(Constants.Config.TOP_LEVEL_PACKAGES)),
+			Joiner.on(", ").join(conf.getStringList(Constants.Config.EXLUDE_CLASS_NAMES)),
+			Joiner.on(", ").join(conf.getStringList(Constants.Config.INCLUDE_CLASSES_NAMES)),
+			Joiner.on(", ").join(conf.getStringList(Constants.Config.EXCLUDE_FIELD_NAMES)),
+			Joiner.on(", ").join(conf.getStringList(Constants.Config.EXCLUDE_FIELD_ANNOTATION_NAMES))
+		));
 	}
 
 
@@ -43,23 +76,28 @@ public class TypeScriptGenerator {
 
 	public void run() throws IOException {
 		ClassPath classPath = ClassPath.from(TypeScriptGenerator.class.getClassLoader());
-		if(config.hasPathOrNull("debug")){
+		if (config.hasPathOrNull(Constants.Config.DEBUG)) {
 			System.out.println(format("Classpath: \n %s", Joiner.on("\n").join(classPath.getAllClasses())));
 		}
+		if (config.hasPath(Constants.Config.INCLUDE_CLASSES_NAMES) && config.getStringList(Constants.Config.INCLUDE_CLASSES_NAMES).size() > 0) {
+			System.out.println("Found included class patterns. Proceeding with class filtering.");
+			processIncludedOnly(classPath);
+		} else {
+			System.out.println("Proceeding with package filtering.");
+			processFromPackages(classPath);
+		}
+		writeModules();
+	}
+
+	private void processFromPackages(ClassPath classPath) {
 		List<String> packageNames = config.getStringList(Constants.Config.TOP_LEVEL_PACKAGES);
-		List<String> exludedClassNames = config.getStringList(Constants.Config.EXLUDED_CLASS_NAMES);
-		System.out.println(format(
-			"Running for %s packages and %s exluded classes",
-			Joiner.on(", ").join(packageNames),
-			Joiner.on(", ").join(exludedClassNames)
-		));
 		for (String packageName : packageNames) {
 			System.out.println(format("Searching in %s", packageName));
 			ImmutableSet<ClassPath.ClassInfo> classesRecursive = classPath.getTopLevelClassesRecursive(packageName);
 			System.out.println(format("Found %s classes", classesRecursive.size()));
 			for (ClassPath.ClassInfo classInfo : classesRecursive) {
 				String name = classInfo.getName();
-				if (!name.contains("-") && !exludedClassNames.contains(name)) {
+				if (!name.contains("-") && !matchesPatterns(EXCLUDE_CLASS_PATTERNS, name)) {
 					Class<?> clazz = classInfo.load();
 					System.out.println(format("Processing class %s", name));
 					process(clazz);
@@ -68,6 +106,49 @@ public class TypeScriptGenerator {
 				}
 			}
 		}
+	}
+
+	private boolean matchesPatterns(List<Pattern> patterns, String toTest) {
+		for (Pattern pattern : patterns) {
+			if (pattern.matcher(toTest).matches()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean hasMatchingAnnotations(List<Pattern> patterns, Field field) {
+		for (Annotation annotation : field.getDeclaredAnnotations()) {
+			final boolean matches = matchesPatterns(patterns, annotation.annotationType().getCanonicalName());
+			if (matches) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void processIncludedOnly(ClassPath classPath) {
+		final UnmodifiableIterator<ClassPath.ClassInfo> it = classPath.getAllClasses().iterator();
+		while (it.hasNext()) {
+			final ClassPath.ClassInfo classInfo = it.next();
+			for (Pattern pattern : INCLUDE_CLASS_PATTERNS) {
+				if (pattern.matcher(classInfo.getName()).matches()) {
+					System.out.println(format("Matched %s to %s", classInfo.getName(), pattern.toString()));
+					process(classInfo.load());
+				}
+			}
+		}
+	}
+
+	private List<Pattern> compilePatterns(List<String> globs) {
+		List<Pattern> patterns = new ArrayList<>();
+		for (String glob : globs) {
+			patterns.add(Pattern.compile(GlobUtils.convertGlobToRegex(glob)));
+		}
+		return patterns;
+	}
+
+	private void writeModules() throws IOException {
 		System.out.println(format("Found %s modules.", modules.size()));
 		for (Module module : modules.values()) {
 			String outputPath = config.getString(Constants.Config.OUTPUT_PATH);
@@ -81,22 +162,38 @@ public class TypeScriptGenerator {
 	}
 
 	private void writeModule(Writer writer, Module module) throws IOException {
+		System.out.println(format("Writing module %s.", module.getName()));
 		writer.write(format("namespace %s { \n\n", module.getName()));
 		for (Class<?> aClass : module.getClasses()) {
+			System.out.println(format("\tWriting class %s.", aClass.getName()));
 			writer.write(format("\t/** %s */\n", aClass.getCanonicalName()));
-			writer.write(format("\texport class %s {\n", aClass.getSimpleName()));
+			final Module superModule = classToModule.get(aClass.getSuperclass());
+			if (superModule != null) {
+				final String superClassName = format("%s%s", module.equals(superModule) ? "" : superModule.getName() + ".", aClass.getSuperclass().getSimpleName());
+				writer.write(format("\texport class %s extends %s {\n", aClass.getSimpleName(), superClassName));
+			} else {
+				writer.write(format("\texport class %s {\n", aClass.getSimpleName()));
+			}
 			if (aClass.isEnum()) {
 				for (Object o : aClass.getEnumConstants()) {
 					writer.write(format("\t\t%s : string =  \"%s\";\n", o, o));
 				}
 			} else {
 				for (Field field : aClass.getDeclaredFields()) {
-					writer.write(format("\t\t%s : %s;\n", field.getName(), getTSType(module, field.getType(), field)));
+					final boolean excludeByName = matchesPatterns(EXCLUDE_FIELD_PATTERNS, field.getName());
+					System.out.println(format("\t\tWriting field %s.%s.", aClass.getSimpleName(), field.getName()));
+					final boolean excludeByAnnotation = hasMatchingAnnotations(EXCLUDE_FIELD_ANNOTATION_PATTERNS, field);
+					if (!excludeByName &&
+						!excludeByAnnotation) {
+						writer.write(format("\t\t%s : %s;\n", field.getName(), getTSType(module, field.getType(), field)));
+					} else {
+						System.out.println(format("\t\tField %s excluded. Reason: %s", field.getName(), excludeByName ? "excluded by name" : "excluded by annotation"));
+					}
 				}
 			}
 			writer.write("\t}\n");
 		}
-		writer.write(format("}\n"));
+		writer.write("}\n");
 		for (Module submodule : module.getChildren()) {
 			writeModule(writer, submodule);
 		}
@@ -135,15 +232,14 @@ public class TypeScriptGenerator {
 		return "any";
 	}
 
-	public void process(Class<?> clazz) {
-		String prefix = config.getString("namespace-prefix");
-		String moduleName = getName(prefix, clazz);
+	private void process(Class<?> clazz) {
+		String moduleName = getName(clazz);
 		Module module = modules.getOrDefault(moduleName, new Module(moduleName));
 		module.getClasses().add(clazz);
 		modules.put(moduleName, module);
 		classToModule.put(clazz, module);
 		for (Class<?> declaredClass : clazz.getDeclaredClasses()) {
-			String subModuleName = getName(prefix, declaredClass);
+			String subModuleName = getName(declaredClass);
 			Module subModule = modules.getOrDefault(subModuleName, new Module(module, subModuleName));
 			modules.put(subModuleName, subModule);
 			classToModule.put(declaredClass, subModule);
@@ -151,8 +247,7 @@ public class TypeScriptGenerator {
 		}
 	}
 
-	public String getName(String prefix, Class<?> clazz) {
-		prefix = prefix.isEmpty() ? "" : prefix + ".";
+	private String getName(Class<?> clazz) {
 		Class<?> declaringClass = clazz.getDeclaringClass();
 		String packageName = clazz.getPackage().getName();
 		int dotIndex = packageName.lastIndexOf(".");
@@ -176,6 +271,9 @@ public class TypeScriptGenerator {
 		}
 	}
 
+	public LinkedHashMap<String, Module> getModules() {
+		return modules;
+	}
 
 	public static class Module {
 
