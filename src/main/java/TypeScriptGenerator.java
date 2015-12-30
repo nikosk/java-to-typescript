@@ -12,11 +12,7 @@ import java.io.Writer;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Pattern;
 
 import static java.lang.String.format;
@@ -30,13 +26,13 @@ public class TypeScriptGenerator {
 
 
 	private final Config config;
-	private LinkedHashMap<String, Module> modules = new LinkedHashMap<>();
-	private LinkedHashMap<Class<?>, Module> classToModule = new LinkedHashMap<>();
 	private final String prefix;
 	private final List<Pattern> EXCLUDE_FIELD_PATTERNS;
 	private final List<Pattern> EXCLUDE_CLASS_PATTERNS;
 	private final List<Pattern> INCLUDE_CLASS_PATTERNS;
 	private final List<Pattern> EXCLUDE_FIELD_ANNOTATION_PATTERNS;
+	private LinkedHashMap<String, Module> modules = new LinkedHashMap<>();
+	private LinkedHashMap<Class<?>, Module> classToModule = new LinkedHashMap<>();
 
 	public TypeScriptGenerator(Config conf) {
 		this.config = conf;
@@ -164,6 +160,12 @@ public class TypeScriptGenerator {
 	private void writeModule(Writer writer, Module module) throws IOException {
 		System.out.println(format("Writing module %s.", module.getName()));
 		writer.write(format("namespace %s { \n\n", module.getName()));
+		module.getClasses().sort(new Comparator<Class<?>>() {
+			@Override
+			public int compare(Class<?> o1, Class<?> o2) {
+				return o1.isAssignableFrom(o2) ? -1 : 1;
+			}
+		});
 		for (Class<?> aClass : module.getClasses()) {
 			System.out.println(format("\tWriting class %s.", aClass.getName()));
 			writer.write(format("\t/** %s */\n", aClass.getCanonicalName()));
@@ -176,7 +178,7 @@ public class TypeScriptGenerator {
 			}
 			if (aClass.isEnum()) {
 				for (Object o : aClass.getEnumConstants()) {
-					writer.write(format("\t\t%s : string =  \"%s\";\n", o, o));
+					writer.write(format("\t\tpublic static %s : string =  \"%s\";\n", o, o));
 				}
 			} else {
 				for (Field field : aClass.getDeclaredFields()) {

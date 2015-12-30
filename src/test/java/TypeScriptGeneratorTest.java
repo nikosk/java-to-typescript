@@ -1,8 +1,12 @@
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import org.hamcrest.collection.IsIterableContainingInOrder;
 import org.junit.Test;
+import testclasses.SomeClass;
+import testclasses.SubClass;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -22,7 +26,7 @@ public class TypeScriptGeneratorTest {
 		generator.run();
 		final LinkedHashMap<String, TypeScriptGenerator.Module> modules = generator.getModules();
 		assertThat(modules.size(), is(equalTo(1)));
-		assertThat(modules.values().iterator().next().getClasses().size(), is(equalTo(2)));
+		assertThat(modules.values().iterator().next().getClasses().size(), is(equalTo(3)));
 	}
 
 
@@ -33,7 +37,7 @@ public class TypeScriptGeneratorTest {
 		generator.run();
 		final LinkedHashMap<String, TypeScriptGenerator.Module> modules = generator.getModules();
 		assertThat(modules.size(), is(equalTo(1)));
-		assertThat(modules.values().iterator().next().getClasses().size(), is(equalTo(1)));
+		assertThat(modules.values().iterator().next().getClasses().size(), is(equalTo(2)));
 	}
 
 
@@ -52,6 +56,17 @@ public class TypeScriptGeneratorTest {
 		final Config config = ConfigFactory.load("exclude-some-fields");
 		TypeScriptGenerator generator = new TypeScriptGenerator(config);
 		generator.run();
+	}
+
+	@Test
+	public void testSortedOutput() throws Exception {
+		final Config config = ConfigFactory.load("include-some-sorted");
+		TypeScriptGenerator generator = new TypeScriptGenerator(config);
+		generator.run();
+		final LinkedHashMap<String, TypeScriptGenerator.Module> modules = generator.getModules();
+		List<Class<?>> classes = modules.values().iterator().next().getClasses();
+		assertThat(classes.get(0).getName(), equalTo(SomeClass.class.getName()));
+		assertThat(classes.get(1).getName(), equalTo(SubClass.class.getName()));
 	}
 
 }
