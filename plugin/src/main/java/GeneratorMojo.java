@@ -15,7 +15,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.List;
 
-@Mojo(name = "gr/dsigned/typescript/generator", requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME, defaultPhase = LifecyclePhase.PROCESS_CLASSES)
+@Mojo(name = "generator", requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME, defaultPhase = LifecyclePhase.PROCESS_CLASSES)
 public class GeneratorMojo extends AbstractMojo {
 
 	@Parameter(property = "generator.configurationResource", defaultValue = "application")
@@ -37,7 +37,7 @@ public class GeneratorMojo extends AbstractMojo {
 			URLClassLoader newLoader = new URLClassLoader(runtimeUrls, Thread.currentThread().getContextClassLoader());
 			final Config config = ConfigFactory.load(newLoader, configurationResource);
 			getLog().info("Stating generator with config:" + configurationResource);
-			getLog().info("Config: \n" + config.root().render());
+			getLog().debug("Config: \n" + config.root().render());
 			TypeScriptGenerator generator = new TypeScriptGenerator(config);
 			generator.run();
 		} catch (Exception e) {
