@@ -1,6 +1,6 @@
 ## Purpose
 
-**java-to-typescript** creates namespaced Typescript classes from Java classes. It correctly handles inner classes (creates inner typescript namespaces). 
+**java-to-typescript** creates namespaced Typescript classes from Java classes. It correctly handles inner classes (creates inner typescript namespaces) and inheritance. 
 
 Using this library you can export your Java DTO objects for use in typescript/javascript.
 
