@@ -26,12 +26,19 @@ public class TypeScriptGenerator {
 
 
 	private final Config config;
+
 	private final String prefix;
+
 	private final List<Pattern> EXCLUDE_FIELD_PATTERNS;
+
 	private final List<Pattern> EXCLUDE_CLASS_PATTERNS;
+
 	private final List<Pattern> INCLUDE_CLASS_PATTERNS;
+
 	private final List<Pattern> EXCLUDE_FIELD_ANNOTATION_PATTERNS;
+
 	private LinkedHashMap<String, Module> modules = new LinkedHashMap<>();
+
 	private LinkedHashMap<Class<?>, Module> classToModule = new LinkedHashMap<>();
 
 	public TypeScriptGenerator(Config conf) {
@@ -77,7 +84,7 @@ public class TypeScriptGenerator {
 		}
 		if (config.hasPath(Constants.Config.INCLUDE_CLASSES_NAMES) && config.getStringList(Constants.Config.INCLUDE_CLASSES_NAMES).size() > 0) {
 			System.out.println("Found included class patterns. Proceeding with class filtering.");
-			processIncludedOnly(classPath);
+			processIncluded(classPath);
 		} else {
 			System.out.println("Proceeding with package filtering.");
 			processFromPackages(classPath);
@@ -93,7 +100,7 @@ public class TypeScriptGenerator {
 			System.out.println(format("Found %s classes", classesRecursive.size()));
 			for (ClassPath.ClassInfo classInfo : classesRecursive) {
 				String name = classInfo.getName();
-				if (!name.contains("-") && !matchesPatterns(EXCLUDE_CLASS_PATTERNS, name)) {
+				if (!name.contains("-") && !matchesExcludePattern(name)) {
 					Class<?> clazz = classInfo.load();
 					System.out.println(format("Processing class %s", name));
 					process(clazz);
@@ -104,32 +111,60 @@ public class TypeScriptGenerator {
 		}
 	}
 
-	private boolean matchesPatterns(List<Pattern> patterns, String toTest) {
-		for (Pattern pattern : patterns) {
-			if (pattern.matcher(toTest).matches()) {
-				return true;
-			}
+	private boolean matchesExcludePattern(String toTest) {
+		Pattern result = matchesPatterns(EXCLUDE_CLASS_PATTERNS, toTest);
+		if (result != null) {
+			System.out.println(format("Excluding %s because it matches '%s'", toTest, result));
+			return true;
 		}
 		return false;
+	}
+
+	private boolean matchesIncludePattern(String toTest) {
+		Pattern result = matchesPatterns(INCLUDE_CLASS_PATTERNS, toTest);
+		if (result != null) {
+			System.out.println(format("Including %s because it matches '%s'", toTest, result));
+			return true;
+		}
+		return false;
+	}
+
+	private boolean matchesExcludeFieldPattern(String toTest) {
+		Pattern result = matchesPatterns(EXCLUDE_FIELD_PATTERNS, toTest);
+		if (result != null) {
+			System.out.println(format("\t\t%s matches '%s'", toTest, result));
+			return true;
+		}
+		return false;
+	}
+
+
+	private Pattern matchesPatterns(List<Pattern> patterns, String toTest) {
+		for (Pattern pattern : patterns) {
+			if (pattern.matcher(toTest).matches()) {
+				return pattern;
+			}
+		}
+		return null;
 	}
 
 	private boolean hasMatchingAnnotations(List<Pattern> patterns, Field field) {
 		for (Annotation annotation : field.getDeclaredAnnotations()) {
-			final boolean matches = matchesPatterns(patterns, annotation.annotationType().getCanonicalName());
-			if (matches) {
+			final Pattern matches = matchesPatterns(patterns, annotation.annotationType().getCanonicalName());
+			if (matches != null) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	private void processIncludedOnly(ClassPath classPath) {
+	private void processIncluded(ClassPath classPath) {
 		final UnmodifiableIterator<ClassPath.ClassInfo> it = classPath.getAllClasses().iterator();
 		while (it.hasNext()) {
 			final ClassPath.ClassInfo classInfo = it.next();
-			for (Pattern pattern : INCLUDE_CLASS_PATTERNS) {
-				if (pattern.matcher(classInfo.getName()).matches()) {
-					System.out.println(format("Matched %s to %s", classInfo.getName(), pattern.toString()));
+			String name = classInfo.getName();
+			if (!matchesExcludePattern(name)) {
+				if (matchesIncludePattern(name)) {
 					process(classInfo.load());
 				}
 			}
@@ -160,18 +195,13 @@ public class TypeScriptGenerator {
 	private void writeModule(Writer writer, Module module) throws IOException {
 		System.out.println(format("Writing module %s.", module.getName()));
 		writer.write(format("namespace %s { \n\n", module.getName()));
-		module.getClasses().sort(new Comparator<Class<?>>() {
-			@Override
-			public int compare(Class<?> o1, Class<?> o2) {
-				return o1.isAssignableFrom(o2) ? -1 : 1;
-			}
-		});
 		for (Class<?> aClass : module.getClasses()) {
 			System.out.println(format("\tWriting class %s.", aClass.getName()));
 			writer.write(format("\t/** %s */\n", aClass.getCanonicalName()));
-			final Module superModule = classToModule.get(aClass.getSuperclass());
+			Class<?> superclass = aClass.getSuperclass();
+			final Module superModule = classToModule.get(superclass);
 			if (superModule != null) {
-				final String superClassName = format("%s%s", module.equals(superModule) ? "" : superModule.getName() + ".", aClass.getSuperclass().getSimpleName());
+				final String superClassName = format("%s%s", module.equals(superModule) ? "" : superModule.getName() + ".", superclass.getSimpleName());
 				writer.write(format("\texport class %s extends %s {\n", aClass.getSimpleName(), superClassName));
 			} else {
 				writer.write(format("\texport class %s {\n", aClass.getSimpleName()));
@@ -182,7 +212,7 @@ public class TypeScriptGenerator {
 				}
 			} else {
 				for (Field field : aClass.getDeclaredFields()) {
-					final boolean excludeByName = matchesPatterns(EXCLUDE_FIELD_PATTERNS, field.getName());
+					final boolean excludeByName = matchesExcludeFieldPattern(field.getName());
 					System.out.println(format("\t\tWriting field %s.%s.", aClass.getSimpleName(), field.getName()));
 					final boolean excludeByAnnotation = hasMatchingAnnotations(EXCLUDE_FIELD_ANNOTATION_PATTERNS, field);
 					if (!excludeByName &&
@@ -279,8 +309,19 @@ public class TypeScriptGenerator {
 
 	public static class Module {
 
-		private List<Class<?>> classes = new ArrayList<>();
+		private Set<Class<?>> classes = new TreeSet<>(new Comparator<Class<?>>() {
+			@Override
+			public int compare(Class<?> o1, Class<?> o2) {
+				if(o1.equals(o2)){
+					return 0;
+				}
+				boolean assignableFrom = o1.isAssignableFrom(o2);
+				return assignableFrom ? -1 : 1;
+			}
+		});
+
 		private String name;
+
 		private List<Module> children = new ArrayList<>();
 
 		private Module parent;
@@ -299,7 +340,7 @@ public class TypeScriptGenerator {
 			return name;
 		}
 
-		public List<Class<?>> getClasses() {
+		public Set<Class<?>> getClasses() {
 			return classes;
 		}
 

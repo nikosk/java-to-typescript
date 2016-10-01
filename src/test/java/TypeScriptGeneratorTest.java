@@ -1,12 +1,12 @@
+import com.google.common.collect.Iterables;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import org.hamcrest.collection.IsIterableContainingInOrder;
 import org.junit.Test;
 import testclasses.SomeClass;
 import testclasses.SubClass;
 
 import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -64,9 +64,10 @@ public class TypeScriptGeneratorTest {
 		TypeScriptGenerator generator = new TypeScriptGenerator(config);
 		generator.run();
 		final LinkedHashMap<String, TypeScriptGenerator.Module> modules = generator.getModules();
-		List<Class<?>> classes = modules.values().iterator().next().getClasses();
-		assertThat(classes.get(0).getName(), equalTo(SomeClass.class.getName()));
-		assertThat(classes.get(1).getName(), equalTo(SubClass.class.getName()));
+		Set<Class<?>> classes = modules.values().iterator().next().getClasses();
+
+		assertThat(Iterables.get(classes,0).getName(), equalTo(SomeClass.class.getName()));
+		assertThat(Iterables.get(classes,1).getName(), equalTo(SubClass.class.getName()));
 	}
 
 }

@@ -10,10 +10,9 @@ import java.util.logging.Logger;
  * Project: java-to-typescript
  * Package: testclasses
  */
-public class SomeClass extends DoNotInclude{
+public class SomeClass extends WDoNotInclude<String> {
 
 	private static final Logger logger = Logger.getAnonymousLogger();
-
 
 	private String somefield;
 
