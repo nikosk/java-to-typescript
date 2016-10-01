@@ -7,11 +7,12 @@
 		<groupId>gr.dsigned</groupId>
 		<version>1.0.0</version>
 	</parent>
+
 	<modelVersion>4.0.0</modelVersion>
-
+	<packaging>maven-plugin</packaging>
 	<artifactId>java-to-typescript-plugin</artifactId>
-	<build>
 
+	<build>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -33,13 +34,11 @@
 	</build>
 
 	<dependencies>
-
 		<dependency>
 			<groupId>gr.dsigned</groupId>
 			<artifactId>java-to-typescript-standalone</artifactId>
 			<version>${project.parent.version}</version>
 		</dependency>
-
 		<dependency>
 			<groupId>org.apache.maven</groupId>
 			<artifactId>maven-plugin-api</artifactId>
