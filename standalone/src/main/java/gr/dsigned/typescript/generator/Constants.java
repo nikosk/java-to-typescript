@@ -1,3 +1,5 @@
+package gr.dsigned.typescript.generator;
+
 /**
  * Created by nk on 11/12/15.
  * Project: java-to-typescript

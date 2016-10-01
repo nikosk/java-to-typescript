@@ -1,3 +1,5 @@
+package gr.dsigned.typescript.generator;
+
 /**
  * Thanks to Neil Traft
  * http://stackoverflow.com/a/17369948

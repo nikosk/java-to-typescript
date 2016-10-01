@@ -1,3 +1,5 @@
+package gr.dsigned.typescript.generator;
+
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.UnmodifiableIterator;
@@ -5,7 +7,9 @@ import com.google.common.reflect.ClassPath;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
+
 import javax.xml.datatype.XMLGregorianCalendar;
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
@@ -183,6 +187,7 @@ public class TypeScriptGenerator {
 		System.out.println(format("Found %s modules.", modules.size()));
 		for (Module module : modules.values()) {
 			String outputPath = config.getString(Constants.Config.OUTPUT_PATH);
+			new File(outputPath).mkdirs();
 			if (module.getParent() == null) {
 				FileWriter writer = new FileWriter(format(outputPath + "/%s.ts", module.getName()));
 				writeModule(writer, module);
