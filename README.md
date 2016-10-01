@@ -6,9 +6,9 @@ Using this library you can export your Java DTO objects for use in typescript/ja
 
 ## Usage
 
-Register the repository in your pom.xml
+1) Register the repository in your pom.xml
 
-``` 
+```
 <repositories>
     <repository>
         <id>java-to-typescript-repo</id>
@@ -17,29 +17,26 @@ Register the repository in your pom.xml
 </repositories>
 ```
 
-Add the plugin in your build:
+2) Add the plugin in your build:
 
 ```
 <plugin>
-		<groupId>gr.dsigned</groupId>
-		<artifactId>java-to-typescript-plugin</artifactId>
- 		<version>1.0.0</version>
+        <groupId>gr.dsigned</groupId>
+        <artifactId>java-to-typescript-plugin</artifactId>
+        <version>1.0.0</version>
     <dependencies>
-			[Add your dependencies here. The generator will scan only the dependencies registered here.]
-			<dependency>
-      		<groupId>my.group</groupId>
-      		<artifactId>my.classes.to.be.converted</artifactId>
-      		<version>${dto.version}</version>
+            [Add your dependencies here. The generator will scan only the dependencies registered here.]
+            <dependency>
+              <groupId>my.group</groupId>
+              <artifactId>my.classes.to.be.converted</artifactId>
+              <version>${dto.version}</version>
       </dependency>
     </dependencies>
 </plugin>
-
 ```
+3) Create a file named ```application.conf``` in ```src/main/resources```. Place your configuration there (see reference.conf for info).
 
-
-then run ```mvn gr.dsigned:java-to-typescript-plugin:1.0.0:generator``` to generate your Typescript classes.
-
-See: reference.conf for info
+4) run ```mvn gr.dsigned:java-to-typescript-plugin:generator``` to generate your Typescript classes.
 
 ## License
 
