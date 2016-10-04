@@ -7,7 +7,6 @@ import com.google.common.reflect.ClassPath;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-
 import javax.xml.datatype.XMLGregorianCalendar;
 import java.io.File;
 import java.io.FileWriter;
@@ -185,22 +184,38 @@ public class TypeScriptGenerator {
 
 	private void writeModules() throws IOException {
 		System.out.println(format("Found %s modules.", modules.size()));
+		final ArrayList<String> refs = new ArrayList<>();
+		String outputPath = config.getString(Constants.Config.OUTPUT_PATH);
 		for (Module module : modules.values()) {
-			String outputPath = config.getString(Constants.Config.OUTPUT_PATH);
 			new File(outputPath).mkdirs();
 			if (module.getParent() == null) {
-				FileWriter writer = new FileWriter(format(outputPath + "/%s.ts", module.getName()));
+				final String fileName = format(outputPath + "/%s.ts", module.getName());
+				FileWriter writer = new FileWriter(fileName);
 				writeModule(writer, module);
 				writer.flush();
 				writer.close();
+				refs.add(format("%s.ts", module.getName()));
 			}
 		}
+		FileWriter writer = new FileWriter(outputPath + "/index.d.ts");
+		for (String ref : refs) {
+			writer.write(format("/// <reference path='./%s' />\n", ref));
+		}
+		writer.flush();
+		writer.close();
 	}
 
 	private void writeModule(Writer writer, Module module) throws IOException {
 		System.out.println(format("Writing module %s.", module.getName()));
+		if (module.getClasses().isEmpty()) {
+			return;
+		}
+		if (module.getParent() == null) {
+			writer.write(format("/// <reference path='./index.d.ts' />\n\n"));
+		}
 		writer.write(format("namespace %s { \n\n", module.getName()));
-		for (Class<?> aClass : module.getClasses()) {
+		final ArrayList<Class<?>> classes = new ArrayList<>(new LinkedHashSet<>(module.getClasses()));
+		for (Class<?> aClass : ClassSort.sort(classes)) {
 			System.out.println(format("\tWriting class %s.", aClass.getName()));
 			writer.write(format("\t/** %s */\n", aClass.getCanonicalName()));
 			Class<?> superclass = aClass.getSuperclass();
@@ -314,20 +329,11 @@ public class TypeScriptGenerator {
 
 	public static class Module {
 
-		private Set<Class<?>> classes = new TreeSet<>(new Comparator<Class<?>>() {
-			@Override
-			public int compare(Class<?> o1, Class<?> o2) {
-				if(o1.equals(o2)){
-					return 0;
-				}
-				boolean assignableFrom = o1.isAssignableFrom(o2);
-				return assignableFrom ? -1 : 1;
-			}
-		});
-
 		private String name;
 
 		private List<Module> children = new ArrayList<>();
+
+		private List<Class<?>> classes = new ArrayList<>();
 
 		private Module parent;
 
@@ -345,7 +351,7 @@ public class TypeScriptGenerator {
 			return name;
 		}
 
-		public Set<Class<?>> getClasses() {
+		public List<Class<?>> getClasses() {
 			return classes;
 		}
 
